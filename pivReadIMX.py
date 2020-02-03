@@ -48,7 +48,7 @@ def pivReadIMX(filepath):
     Data = np.reshape(np.transpose(v_array,(2, 0, 1)), [nx, ny * np.size(v_array, 0)])
     
     itype = buffer.image_sub_type
-    
+
     #   Grayvalue image format
     if itype <= 0: 
         lhs3 = Data[:, drngY - 1].T
@@ -66,6 +66,7 @@ def pivReadIMX(filepath):
     
     #   normal 2D vector format + peak: sel+4*(vx,vy) (+peak)
     elif itype == 3 or itype == 1:    
+        
         #   calculate vector position and components
         lhs1, lhs2 = np.meshgrid(lhs1, lhs2)
         lhs1 = lhs1.T
@@ -81,7 +82,6 @@ def pivReadIMX(filepath):
             mask = lhs5 == (i + 1)
             
             if i < 4:   #   get best vectors
-#                dat = Data[:, drngY + (2 * i + 1) * ny - 1][mask]
                 lhs3[mask] = Data[:, drngY + (2 * i + 1) * ny - 1][mask]
                 lhs4[mask] = Data[:, drngY + (2 * i + 2) * ny - 1][mask]
                 
@@ -106,34 +106,42 @@ def pivReadIMX(filepath):
         lhs2 = lhs2.T
         lhs3 = lhs3.T
 
+    # stereo vector format
     elif itype == 5:
         lhs3 = (drngZ - 0.5) * buffer.vectorGrid * scaleZ[0] + scaleZ[1]
         lhs4 = np.zeros((nx, ny, nz))
-        lhs5 = lhs4
-        lhs6 = lhs4
-        for iz in range(1 ,nz + 1):
+        lhs5 = np.zeros((nx, ny, nz))
+        lhs6 = np.zeros((nx, ny, nz))
+        
+        for iz in range(0 ,nz):
             pX = np.zeros((nx, ny))
             pY = np.zeros((nx, ny))
             pZ = np.zeros((nx, ny))
-            pRange = drngY + ((iz - 1) * 14 * ny)
+            pRange = drngY + (iz * 14 * ny) - 1
             
             #   Build best vectors from best choice field
-            lhs7 = Data[:,pRange]
+            lhs7 = Data[:, pRange]
+            
             for i in range(0,6):
+                
+                mask = (lhs7 == (i + 1))
+                
                 if i < 4:   #   Get best vectors
-                    mask = (lhs7 == (i + 1))
-                    pX[mask] = Data[: ,pRange + (3 * i + 1) * ny - 1][mask]
-                    pY[mask] = Data[:, pRange + (3 * i + 2) * ny - 1][mask]
-                    pZ[mask] = Data[:, pRange + (3 * i + 3) * ny - 1][mask]
-                else:   #   get interpolated vectors
-                    mask = (lhs7 == (i + 1))
-                    pX[mask] = Data[:, pRange + 10 * ny - 1][mask]
-                    pY[mask] = Data[:, pRange + 11 * ny - 1][mask]
-                    pZ[mask] = Data[:, pRange + 12 * ny - 1][mask]
+                    pX[mask] = Data[:, pRange + (3 * i + 1) * ny][mask]
+                    pY[mask] = Data[:, pRange + (3 * i + 2) * ny][mask]
+                    pZ[mask] = Data[:, pRange + (3 * i + 3) * ny][mask]
                     
-            lhs4[:, :, iz - 1] = pX
-            lhs5[:, :, iz - 1] = pY
-            lhs6[:, :, iz - 1] = pZ
+                else:   #   get interpolated vectors
+                    pX[mask] = Data[:, pRange + 10 * ny][mask]
+                    pY[mask] = Data[:, pRange + 11 * ny][mask]
+                    pZ[mask] = Data[:, pRange + 12 * ny][mask]
+                    
+            lhs4[:, :, iz] = pX
+            lhs5[:, :, iz] = pY
+            lhs6[:, :, iz] = pZ
+        
+        if scaleY[0] < 0:
+            lhs5 = -lhs5
             
         lhs1, lhs2, lhs3 = np.meshgrid(lhs1, lhs2, lhs3)
         lhs1 = lhs1.T

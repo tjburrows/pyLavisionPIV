@@ -45,14 +45,9 @@ def pivTecWriteUniversalAvg(avgPath, datPath):
         if not np.shape(avgData[key]) == (I,J):
             dontInclude.append(key)
     for string in dontInclude:
-        if string in avgData:
-            avgData.pop(string)
-    temp = list(avgData.keys())
-    V = len(temp)
-    varList = ['x','y','u','v']
-    for vn in range(0,V):
-        if not temp[vn] in ['x','y','u','v']:
-            varList.append(temp[vn])
+        avgData.pop(string)
+    varList = list(avgData.keys())
+    V = len(varList)
     varNames = ''
     for ii in range(0,V-1):
         varNames += '"' + varList[ii] + '", '
@@ -71,20 +66,16 @@ def pivTecWriteUniversalInst(instPath, datPath):
     I = vecData['I']
     J = vecData['J']
     N = I * J
-    frames = np.size(vecData['u'],2)
+    frames = np.size(vecData['u'],0)
     dontInclude = list()
     for key,_ in vecData.items():
-        if not (np.shape(vecData[key]) == (I,J,frames) or np.shape(vecData[key]) == (I,J)):
+        if not (np.shape(vecData[key]) == (frames,I,J) or np.shape(vecData[key]) == (I,J)):
             dontInclude.append(key)
     for string in dontInclude:
         if string in vecData:
             vecData.pop(string)
-    temp = list(vecData.keys())
-    V = len(temp)
-    varList = ['x','y','u','v']
-    for vn in range(0,V):
-        if not temp[vn] in ['x','y','u','v']:
-            varList.append(temp[vn])
+    varList = list(vecData.keys())
+    V = len(varList)
     varNames = ''
     for ii in range(0,V-1):
         varNames += '"' + varList[ii] + '", '
@@ -94,7 +85,7 @@ def pivTecWriteUniversalInst(instPath, datPath):
     for ii in range(0,frames):
         for vn in range(0,V):
             if np.ndim(vecData[varList[vn]]) == 3:
-                outDict[varList[vn]] = np.reshape(vecData[varList[vn]][:,:,ii].T,N)
+                outDict[varList[vn]] = np.reshape(vecData[varList[vn]][ii,:].T,N)
             else:
                 if ii == 0:
                     outDict[varList[vn]] = np.reshape(vecData[varList[vn]].T,N)

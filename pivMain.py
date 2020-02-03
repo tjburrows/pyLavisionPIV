@@ -4,7 +4,7 @@ import pivFunctions as piv
 cfgData = piv.pivGetCfgData()
 
 #   Calculate Instantaneous and Average Fields
-piv.pivCalcInstAndAvg(cfgData,1)
+piv.pivCalcInstAndAvg(cfgData,0)
 
 #   Export to Tecplot file
 avg  = 1        #   Export Tecplot file for average field
