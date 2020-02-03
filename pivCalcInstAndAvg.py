@@ -24,26 +24,32 @@ def processFile(filePath, is3D, instVort):
         rawX, rawY, rawU, rawV, rawCHC, _, _, attributes = pivReadIMX(filePath)
         
     # Initialize 
-    I        = np.size(rawX,0)
-    J        = np.size(rawX,1)
-    x        = np.flip(rawX,1)
-    y        = np.flip(rawY,1)
-    sourceFile = filePath
+    I = np.size(rawX,0)
+    J = np.size(rawX,1)
+    x = np.flip(rawX,1)
+    y = np.flip(rawY,1)
     u = np.flip(rawU,1)
     v = np.flip(rawV,1)
     chc = np.flip(rawCHC,1)
+    sourceFile = filePath
+    results = {'I':I, 'J':J, 'x':x, 'y':y, 'u':u, 'v':v, 'chc':chc, 'sourceFile':sourceFile}
     
     if is3D:
         w = np.flip(rawW, 1)
+        results['w'] = w
         vmag = np.sqrt(u ** 2 + v ** 2 + w ** 2)
     else:
         vmag = np.sqrt(u ** 2 + v ** 2)
-        
+    
+    results['vmag'] = vmag
+    
     if instVort==1:
-        vort, vortCHC = pivCalcVorticityFV(I, J, x, y, u, v, chc)
+        results['vort'], results['chcvort'] = pivCalcVorticityFV(I, J, x, y, u, v, chc)
         
     elif instVort != 0:
         raise ValueError('instvort must be 0 or 1 to toggle instantaneous vorticity')
+    
+    return results
     
     
 
