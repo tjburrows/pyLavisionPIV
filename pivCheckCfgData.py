@@ -35,4 +35,3 @@ def pivCheckCfgData(cfgData):
         cfgData['numFiles'].append(numFiles)
         cfgData['setPath'].append(setPath)
     return cfgData
-

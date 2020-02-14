@@ -6,54 +6,7 @@ import numpy as np
 from pivIO import savePIV
 import warnings
 
-def processFile(filePath, is3D, instVort):            
-    
-    if not exists(filePath):
-        raise ValueError('File %s doesn\'t exist!' % (filePath))
-        
-    if is3D:
-        rawX, rawY, rawZ, rawU, rawV, rawW, rawCHC, attributes = pivReadIMX(filePath)
-        rawX = np.squeeze(rawX)
-        rawY = np.squeeze(rawY)
-        rawZ = np.squeeze(rawZ)
-        rawU = np.squeeze(rawU)
-        rawV = np.squeeze(rawV)
-        rawW = np.squeeze(rawW)
-        rawCHC = np.squeeze(rawCHC)
-    else:
-        rawX, rawY, rawU, rawV, rawCHC, _, _, attributes = pivReadIMX(filePath)
-        
-    # Initialize 
-    I = np.size(rawX,0)
-    J = np.size(rawX,1)
-    x = np.flip(rawX,1)
-    y = np.flip(rawY,1)
-    u = np.flip(rawU,1)
-    v = np.flip(rawV,1)
-    chc = np.flip(rawCHC,1)
-    sourceFile = filePath
-    results = {'I':I, 'J':J, 'x':x, 'y':y, 'u':u, 'v':v, 'chc':chc, 'sourceFile':sourceFile}
-    
-    if is3D:
-        w = np.flip(rawW, 1)
-        results['w'] = w
-        vmag = np.sqrt(u ** 2 + v ** 2 + w ** 2)
-    else:
-        vmag = np.sqrt(u ** 2 + v ** 2)
-    
-    results['vmag'] = vmag
-    
-    if instVort==1:
-        results['vort'], results['chcvort'] = pivCalcVorticityFV(I, J, x, y, u, v, chc)
-        
-    elif instVort != 0:
-        raise ValueError('instvort must be 0 or 1 to toggle instantaneous vorticity')
-    
-    return results
-    
-    
-
-def pivCalcInstAndAvg(cfgData, instvort):
+def pivCalcInstAndAvg(cfgData, instVort):
     is3D = cfgData['is3D']
     lens = len(cfgData['sets'])
     
@@ -77,6 +30,7 @@ def pivCalcInstAndAvg(cfgData, instvort):
         
         #   Loop over files
         for j in range(0,currentNumFiles):
+            
             print("Processing Frame %d/%d" % (j+1, currentNumFiles))
             
             # current file path
@@ -119,7 +73,7 @@ def pivCalcInstAndAvg(cfgData, instvort):
                     vecData['w']    = np.zeros(vecSize)
                     vecData['z']    = np.flip(rawZ,1)
                     
-                if instvort==1:
+                if instVort==1:
                     vecData['vort']     = np.zeros(vecSize)
                     vecData['chcVort'] = np.zeros(vecSize)
                     
@@ -134,13 +88,13 @@ def pivCalcInstAndAvg(cfgData, instvort):
             else:
                 vecData['vmag'][j, :] = np.sqrt(vecData['u'][j, :] ** 2 + vecData['v'][j, :] ** 2)
                 
-            if instvort==1:
+            if instVort==1:
                 vecDataVort, vecDataVortCHC = pivCalcVorticityFV(vecData['I'], vecData['J'], vecData['x'], vecData['y'], vecData['u'][j, :], vecData['v'][j, :], vecData['chc'][j, :])
                 vecData['vort'][j, :]      = vecDataVort
                 vecData['chcvort'][j, :]  = vecDataVortCHC
                 
-            elif instvort != 0:
-                raise ValueError('instvort must be 0 or 1 to toggle instantaneous vorticity')
+            elif instVort != 0:
+                raise ValueError('instVort must be 0 or 1 to toggle instantaneous vorticity')
                 
         pathVecData = join(cfgData['savePath'], currentSet + '.pkl')
         

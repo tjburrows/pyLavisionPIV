@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from ReadIM.extra import get_Buffer_andAttributeList as readimx, buffer_as_array, buffer_mask_as_array, att2dict
+from ReadIM import DestroyBuffer, DestroyAttributeListSafe
 import numpy as np
 
 def extractUnits(attrib, rawString):
@@ -150,6 +151,12 @@ def pivReadIMX(filepath):
         lhs4 = lhs4 * scaleI[0] + scaleI[1]
         lhs5 = lhs5 * scaleI[0] + scaleI[1]
         lhs6 = lhs6 * scaleI[0] + scaleI[1]
-
+    
+    
+    DestroyBuffer(buffer)
+    DestroyAttributeListSafe(attrib)
+    del(buffer)
+    del(attrib)
+    
     return lhs1,lhs2,lhs3,lhs4,lhs5,lhs6,lhs7,attributes
 
