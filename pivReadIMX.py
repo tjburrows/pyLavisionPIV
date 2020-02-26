@@ -15,6 +15,7 @@ def extractUnits(attrib, rawString):
 
 #   Combination of readimx and showimx_noplot functions
 def pivReadIMX(filepath):
+        
     buffer, attrib   = readimx(filepath)
     v_array, buffer  = buffer_as_array(buffer)
     mask, buffer     = buffer_mask_as_array(buffer)
@@ -49,6 +50,14 @@ def pivReadIMX(filepath):
     Data = np.reshape(np.transpose(v_array,(2, 0, 1)), [nx, ny * np.size(v_array, 0)])
     
     itype = buffer.image_sub_type
+    
+    # Buffer Types:
+    # 0: 'BUFFER_FORMAT_IMAGE',
+    # 1: 'BUFFER_FORMAT_VECTOR_2D_EXTENDED',
+    # 2: 'BUFFER_FORMAT_VECTOR_2D',
+    # 3: 'BUFFER_FORMAT_VECTOR_2D_EXTENDED_PEAK',
+    # 4: 'BUFFER_FORMAT_VECTOR_3D',
+    # 5: 'BUFFER_FORMAT_VECTOR_3D_EXTENDED_PEAK'
 
     #   Grayvalue image format
     if itype <= 0: 
@@ -121,17 +130,21 @@ def pivReadIMX(filepath):
             pRange = drngY + (iz * 14 * ny) - 1
             
             #   Build best vectors from best choice field
-            lhs7 = Data[:, pRange]
+            lhs7 = Data[:, pRange] # choice code
             
+            # Loop over each possible choice code value
             for i in range(0,6):
                 
+                # Mask by current choice code value
                 mask = (lhs7 == (i + 1))
                 
+                # If choice code = 1,2,3
                 if i < 4:   #   Get best vectors
                     pX[mask] = Data[:, pRange + (3 * i + 1) * ny][mask]
                     pY[mask] = Data[:, pRange + (3 * i + 2) * ny][mask]
                     pZ[mask] = Data[:, pRange + (3 * i + 3) * ny][mask]
                     
+                # If choice code = 5,6
                 else:   #   get interpolated vectors
                     pX[mask] = Data[:, pRange + 10 * ny][mask]
                     pY[mask] = Data[:, pRange + 11 * ny][mask]

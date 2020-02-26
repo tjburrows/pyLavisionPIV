@@ -5,8 +5,82 @@ from os import makedirs
 import numpy as np
 from pivIO import savePIV
 import warnings
+from multiprocessing import RawArray
+from multiprocessing import Pool
 
+vecDataShared={}
+
+def processFile(cfgData, i, j, instVort):    
+    is3D = cfgData['is3D']
+    currentFolder = cfgData['setPath'][i]
+    
+     # Current set information
+    fileName = 'B%05d.%s' % (j+1, cfgData['pivExtension'])
+    filePath = join(currentFolder,fileName)
+    
+    if not exists(filePath):
+        raise ValueError('File %s doesn\'t exist!' % (filePath))
+    
+    print("Processing Frame %d" % (j+1))
+    if is3D:
+        rawX, rawY, rawZ, rawU, rawV, rawW, rawCHC, attributes = pivReadIMX(filePath)
+        rawX = np.squeeze(rawX)
+        rawY = np.squeeze(rawY)
+        rawZ = np.squeeze(rawZ)
+        rawU = np.squeeze(rawU)
+        rawV = np.squeeze(rawV)
+        rawW = np.squeeze(rawW)
+        rawCHC = np.squeeze(rawCHC)
+    else:
+        rawX, rawY, rawU, rawV, rawCHC, _, _, attributes = pivReadIMX(filePath)
+    
+    u = np.flip(rawU,1)
+    v = np.flip(rawV,1)
+    chc = np.flip(rawCHC,1)
+    
+    if is3D:
+        w = np.flip(rawW, 1)
+        wShared = np.frombuffer(vecDataShared['w']).reshape(vecDataShared['shape'])
+        wShared[j,:] = w
+        vmag = np.sqrt(u ** 2 + v ** 2 + w ** 2)
+    else:
+        vmag = np.sqrt(u ** 2 + v ** 2)
+    
+    vmagShared = np.frombuffer(vecDataShared['vmag']).reshape(vecDataShared['shape'])
+    vmagShared[j,:] = vmag
+    
+    uShared = np.frombuffer(vecDataShared['u']).reshape(vecDataShared['shape'])
+    uShared[j,:] = u
+    
+    vShared = np.frombuffer(vecDataShared['v']).reshape(vecDataShared['shape'])
+    vShared[j,:] = v
+    
+    chcShared = np.frombuffer(vecDataShared['chc']).reshape(vecDataShared['shape'])
+    chcShared[j,:] = chc
+    
+    if instVort:
+        I = np.size(rawX,0)
+        J = np.size(rawX,1)
+        x = np.flip(rawX,1)
+        y = np.flip(rawY,1)
+        vort, chcvort = pivCalcVorticityFV(I, J, x, y, u, v, chc)
+        
+        vortShared = np.frombuffer(vecDataShared['vort']).reshape(vecDataShared['shape'])
+        vortShared[j,:] = vort
+        
+        chcvortShared = np.frombuffer(vecDataShared['chcvort']).reshape(vecDataShared['shape'])
+        chcvortShared[j,:] = chcvort
+
+def init_worker(dictionary):
+    if type(dictionary) == list:
+        dictionary = dictionary[0]
+    for key,val in dictionary.items():
+        vecDataShared[key] = val
+    
 def pivCalcInstAndAvg(cfgData, instVort):
+    
+    if instVort != 0 and instVort != 1:
+        raise ValueError('instVort must be 0 or 1 to toggle instantaneous vorticity')
     is3D = cfgData['is3D']
     lens = len(cfgData['sets'])
     
@@ -25,87 +99,68 @@ def pivCalcInstAndAvg(cfgData, instVort):
         
         # Initialize vecData dictionary
         vecData={}
-        vecData['sourceFiles'] = list()
+        
         vecData['units'] = {}
         
-        #   Loop over files
-        for j in range(0,currentNumFiles):
-            
-            print("Processing Frame %d/%d" % (j+1, currentNumFiles))
-            
-            # current file path
-            fileName = 'B%05d.%s' % (j+1, cfgData['pivExtension'])
-            filePath = join(currentFolder,fileName)
-            
-            if not exists(filePath):
-                raise ValueError('File %s doesn\'t exist!' % (filePath))
-                
-            if is3D:
-                rawX, rawY, rawZ, rawU, rawV, rawW, rawCHC, attributes = pivReadIMX(filePath)
-                rawX = np.squeeze(rawX)
-                rawY = np.squeeze(rawY)
-                rawZ = np.squeeze(rawZ)
-                rawU = np.squeeze(rawU)
-                rawV = np.squeeze(rawV)
-                rawW = np.squeeze(rawW)
-                rawCHC = np.squeeze(rawCHC)
-            else:
-                rawX, rawY, rawU, rawV, rawCHC, _, _, attributes = pivReadIMX(filePath)
-                
-            # Initialize 
-            if j == 0:
-                vecData['units']['x'] = attributes['UnitX']
-                vecData['units']['y'] = attributes['UnitY']
-                vecData['units']['u'] = attributes['UnitI']
-                    
-                vecData['I']        = np.size(rawX,0)
-                vecData['J']        = np.size(rawX,1)
-                vecSize = (currentNumFiles, vecData['I'], vecData['J'])
-                
-                vecData['x']        = np.flip(rawX,1)
-                vecData['y']        = np.flip(rawY,1)
-                vecData['u']        = np.zeros(vecSize)
-                vecData['v']        = np.zeros(vecSize)
-                vecData['chc']      = np.zeros(vecSize)
-                vecData['vmag']     = np.zeros(vecSize)
-                
-                if is3D:
-                    vecData['w']    = np.zeros(vecSize)
-                    vecData['z']    = np.flip(rawZ,1)
-                    
-                if instVort==1:
-                    vecData['vort']     = np.zeros(vecSize)
-                    vecData['chcVort'] = np.zeros(vecSize)
-                    
-            vecData['sourceFiles'].append(filePath)    
-            vecData['u'][j,:] = np.flip(rawU,1)
-            vecData['v'][j,:] = np.flip(rawV,1)
-            vecData['chc'][j,:] = np.flip(rawCHC,1)
+        # First file setup
+        fileName = 'B%05d.%s' % (1, cfgData['pivExtension'])
+        filePath = join(currentFolder,fileName)
+        rawX,rawY,rawZ, _, _, _, _, attributes = pivReadIMX(filePath)
+        if is3D:
+            rawX = np.squeeze(rawX)
+            rawY = np.squeeze(rawY)
+            rawZ = np.squeeze(rawZ)
+        vecData['units']['x'] = attributes['UnitX']
+        vecData['units']['y'] = attributes['UnitY']
+        vecData['units']['u'] = attributes['UnitI']
+        vecData['sourceFiles'] = [filePath]
+        vecData['I']        = np.size(rawX,0)
+        vecData['J']        = np.size(rawX,1)
+        vecData['x']        = np.flip(rawX,1)
+        vecData['y']        = np.flip(rawY,1)
+        if is3D:
+            vecData['z']    = np.flip(rawZ,1)
+        
+        vecShape = (currentNumFiles, vecData['I'], vecData['J'])
+        vecSize = vecShape[0] * vecShape[1] * vecShape[2]
+        
+        if __name__ == 'pivCalcInstAndAvg':
+            vecDataSharedLocal={}
+            vecDataSharedLocal['shape']    = vecShape
+            vecDataSharedLocal['u']        = RawArray('d',vecSize)
+            vecDataSharedLocal['v']        = RawArray('d',vecSize)
+            vecDataSharedLocal['chc']      = RawArray('d',vecSize)
+            vecDataSharedLocal['vmag']     = RawArray('d',vecSize)
             
             if is3D:
-                vecData['w'][j,:] = np.flip(rawW, 1)
-                vecData['vmag'][j, :] = np.sqrt(vecData['u'][j, :] ** 2 + vecData['v'][j, :] ** 2 + vecData['w'][j, :] ** 2)
-            else:
-                vecData['vmag'][j, :] = np.sqrt(vecData['u'][j, :] ** 2 + vecData['v'][j, :] ** 2)
+                vecDataSharedLocal['w']    = RawArray('d',vecSize)
                 
             if instVort==1:
-                vecDataVort, vecDataVortCHC = pivCalcVorticityFV(vecData['I'], vecData['J'], vecData['x'], vecData['y'], vecData['u'][j, :], vecData['v'][j, :], vecData['chc'][j, :])
-                vecData['vort'][j, :]      = vecDataVort
-                vecData['chcvort'][j, :]  = vecDataVortCHC
+                vecDataSharedLocal['vort']     = RawArray('d',vecSize)
+                vecDataSharedLocal['chcvort']  = RawArray('d',vecSize)
+            
+            init_worker(vecDataSharedLocal)
+            with Pool(initializer=init_worker, initargs=[vecDataSharedLocal]) as p:
+                 p.starmap(processFile, zip([cfgData]*currentNumFiles, [i]*currentNumFiles, range(currentNumFiles), [instVort] * currentNumFiles))
+    
                 
-            elif instVort != 0:
-                raise ValueError('instVort must be 0 or 1 to toggle instantaneous vorticity')
-                
-        pathVecData = join(cfgData['savePath'], currentSet + '.pkl')
+            for key,val in vecDataShared.items():
+                if not key == 'shape':
+                    vecData[key] = np.frombuffer(val).reshape(vecDataShared['shape'])
         
-        print('DONE\nSaving %s...' % pathVecData, end='')
-        
-        savePIV(vecData, pathVecData)
-        
-        print('DONE\nAveraging...',end='')
-        pivCalcAvg(cfgData, vecData, currentSet)
-        
-        print('DONE')
+            pathVecData = join(cfgData['savePath'], currentSet + '.pkl')
+            
+            print('DONE\nSaving %s...' % pathVecData, end='')
+            
+            savePIV(vecData, pathVecData)
+            
+            print('DONE\nAveraging...',end='')
+            pivCalcAvg(cfgData, vecData, currentSet)
+            
+            print('DONE')
+
+def atan(x1,x2):
+    return np.arctan2(x1,x2) * (180.0/np.pi)
 
 
 def pivCalcAvg(cfgData, vecData, currentSet):
@@ -139,6 +194,9 @@ def pivCalcAvg(cfgData, vecData, currentSet):
         avgData['u'] = np.nanmean(u, axis=0)
         avgData['v'] = np.nanmean(v, axis=0)
         
+        # Calculate Angle
+        avgData['yxangle'] = atan(avgData['v'], avgData['u'])
+        
         # Calculate fluctuations
         uPrime = vecData['u'] - avgData['u']
         vPrime = vecData['v'] - avgData['v']
@@ -161,6 +219,10 @@ def pivCalcAvg(cfgData, vecData, currentSet):
             w = vecData['w']
             w[vecData['chc'] == 0] = np.nan
             avgData['w'] = np.nanmean(w, axis=0)
+            
+            # Calculate Angles
+            avgData['zxangle'] = atan(avgData['w'], avgData['u'])
+            avgData['zyangle'] = atan(avgData['w'], avgData['v'])
             
             # W fluctuations
             wPrime = vecData['w'] - avgData['w']
